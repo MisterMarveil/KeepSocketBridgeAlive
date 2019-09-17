@@ -122,16 +122,16 @@ void Socket::onTextMessageReceived(const QString &msg){
 void Socket::sendPing(){
     m_recursiveTimer->stop();
     qDebug() << "Trying a ping";
-    m_webSocket->sendTextMessage("{\"type\": \"ping\", \"clientsockettype\":\"KEEP_CLIENT\"}");
+    m_webSocket->sendTextMessage("{\"type\": \"ping\", \"socketclienttype\":\"KEEP_CLIENT\"}");
     m_recursiveTimer->singleShot(m_recursiveTime + 500, this, SLOT(resetSocketBridgeAttempts()));
 }
 
 void Socket::resetSocketBridgeAttempts(){
-    if(m_webSocket->isValid()){
-        qDebug() << "m_websocket is valid reset socket aborted \n";
+    if(m_webSocket->isValid()){        
+        qDebug() << "bridge is on " << QDateTime::currentDateTime().toString() << "\n";
         return;
     }else{
-        qDebug() << "m_websocket is not valid \n";
+        qDebug() << "fail to connect bridge may be down \n";
     }
 
 
@@ -139,7 +139,7 @@ void Socket::resetSocketBridgeAttempts(){
         m_recursiveTimer->stop();
         m_recursiveTimer->singleShot(m_recursiveTime, this, SLOT(resetSocketBridgeAttempts()));
         m_triesCount++;
-        qDebug() << "initialisation programmée";
+        qDebug() << "initialization programmed";
     }else{//nous avons atteint la limite. Nous relançons le socketbridge
         qDebug() << "Try to restart socketbridge";
         m_process->start();
