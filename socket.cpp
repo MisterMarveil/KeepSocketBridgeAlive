@@ -2,7 +2,7 @@
 
 Socket::Socket(QCoreApplication *app, QObject *parent) :
     QObject(parent),
-    m_url("ws://localhost:4559"),
+    m_url("ws://dd:4559"),
     m_app(app),
     m_triesCount(0),
     m_triesThreshold(3),
@@ -28,7 +28,7 @@ Socket::Socket(QCoreApplication *app, QObject *parent) :
         resetSocketBridgeAttempts();
     });
     m_webSocket->open(QUrl(m_url));
-
+    m_recursiveTimer->singleShot(m_recursiveTime, this , SLOT(sendPing()));
     //any 1hour= 3600000ms, we throw the timer so that the process is killed
     m_ttlTimer->singleShot((3600000), this, SLOT(timeoutReached()));
 }
@@ -113,6 +113,7 @@ void Socket::onTextMessageReceived(const QString &msg){
     QMap<QString, QVariant> msgMap = retrieveJsonDoc(msg);
 
     if(msgMap.contains("pong")){
+        qDebug() << "Receiving a pong";
        m_triesCount = 0;
        m_recursiveTimer->stop();
        m_recursiveTimer->singleShot(m_recursiveTime, this, SLOT(sendPing()));
@@ -120,21 +121,27 @@ void Socket::onTextMessageReceived(const QString &msg){
 }
 void Socket::sendPing(){
     m_recursiveTimer->stop();
+    qDebug() << "Trying a ping";
     m_webSocket->sendTextMessage("{\"type\": \"ping\", \"clientsockettype\":\"KEEP_CLIENT\"}");
-    m_recursiveTimer->singleShot(m_recursiveTime + 500, this, SLOT(resetSocketBridgeAttempts));
+    m_recursiveTimer->singleShot(m_recursiveTime + 500, this, SLOT(resetSocketBridgeAttempts()));
 }
 
 void Socket::resetSocketBridgeAttempts(){
     if(m_webSocket->isValid()){
+        qDebug() << "m_websocket is valid reset socket aborted \n";
         return;
+    }else{
+        qDebug() << "m_websocket is not valid \n";
     }
+
 
     if(m_triesCount < m_triesThreshold){//nous ne sommes pas encore à la limite des essais donc nous essayons
         m_recursiveTimer->stop();
-        m_recursiveTimer->singleShot(m_recursiveTime, m_webSocket, SLOT(open));
+        m_recursiveTimer->singleShot(m_recursiveTime, this, SLOT(resetSocketBridgeAttempts()));
         m_triesCount++;
+        qDebug() << "initialisation programmée";
     }else{//nous avons atteint la limite. Nous relançons le socketbridge
-        qDebug() << "Try to restart datimob";
+        qDebug() << "Try to restart socketbridge";
         m_process->start();
         m_process->waitForFinished();                       //Waits for execution to complete
 
@@ -146,6 +153,9 @@ void Socket::resetSocketBridgeAttempts(){
                   << "\n Printing the standard error..........\n"
                   << StdError << "\n\n";
     }
+}
+void Socket::initSocket(){
+    m_webSocket->open(m_url);
 }
 void Socket::timeoutReached(){
      m_app->exit(1);

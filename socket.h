@@ -24,6 +24,7 @@ signals:
 public slots:
     void onSocketConnected();
     void onSocketClosed();
+    void initSocket();
     void timeoutReached();
     void onTextMessageReceived(const QString &msg);
     void sendPing();
