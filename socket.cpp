@@ -2,11 +2,12 @@
 
 Socket::Socket(QCoreApplication *app, QObject *parent) :
     QObject(parent),
-    m_url("http://localhost:4559"),
+    m_url("ws://localhost:4559"),
     m_app(app),
     m_triesCount(0),
     m_triesThreshold(3),
-    m_serviceName("dati_socket")
+    m_serviceName("dati_socket"),
+    m_recursiveTime(10000)
 
 {
     loadSettings();
@@ -23,24 +24,8 @@ Socket::Socket(QCoreApplication *app, QObject *parent) :
     connect(m_webSocket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
           [=](QAbstractSocket::SocketError error){
         qDebug() << "Error emitted: \n errorcode:" << error << " \n error msg: " << m_webSocket->errorString();
-        if(!m_webSocket->isValid()){
-            if(m_triesCount < m_triesThreshold){//nous ne sommes pas encore à la limite des essais
-                m_recursiveTimer->stop();
-                m_recursiveTimer->singleShot(5000, m_webSocket, SLOT(open));
-                m_triesCount++;
-            }else{//nous avons atteint la limite. Nous relançons le socketbridge
-                m_process->start();
-                m_process->waitForFinished();                       //Waits for execution to complete
 
-                QString StdOut = m_process->readAllStandardOutput();  //Reads standard output
-                QString StdError = m_process->readAllStandardError();   //Reads standard error
-
-                qDebug() <<  "\n Printing the standard output..........\n"
-                          <<  StdOut
-                          << "\n Printing the standard error..........\n"
-                          << StdError << "\n\n";
-            }
-        }
+        resetSocketBridgeAttempts();
     });
     m_webSocket->open(QUrl(m_url));
 
@@ -92,6 +77,11 @@ void Socket::loadSettings(){
            qDebug() << "retrieved keepalive_socket_address from " << fileName << " /value: "<< params.value("keepalive_socket_address");
            m_url = params.value("keepalive_socket_address");
        }
+
+       if(params.contains("keepalive_recursive_time")){
+           qDebug() << "retrieved keepalive_recursive_time from " << fileName << " /value: "<< params.value("keepalive_recursive_time");
+           m_recursiveTime = params.value("keepalive_recursive_time").toInt();
+       }
     }
 }
 
@@ -125,11 +115,37 @@ void Socket::onTextMessageReceived(const QString &msg){
     if(msgMap.contains("pong")){
        m_triesCount = 0;
        m_recursiveTimer->stop();
-       m_recursiveTimer->singleShot(10000, this, SLOT(sendPing()));
+       m_recursiveTimer->singleShot(m_recursiveTime, this, SLOT(sendPing()));
     }
 }
 void Socket::sendPing(){
+    m_recursiveTimer->stop();
     m_webSocket->sendTextMessage("{\"type\": \"ping\", \"clientsockettype\":\"KEEP_CLIENT\"}");
+    m_recursiveTimer->singleShot(m_recursiveTime + 500, this, SLOT(resetSocketBridgeAttempts));
+}
+
+void Socket::resetSocketBridgeAttempts(){
+    if(m_webSocket->isValid()){
+        return;
+    }
+
+    if(m_triesCount < m_triesThreshold){//nous ne sommes pas encore à la limite des essais donc nous essayons
+        m_recursiveTimer->stop();
+        m_recursiveTimer->singleShot(m_recursiveTime, m_webSocket, SLOT(open));
+        m_triesCount++;
+    }else{//nous avons atteint la limite. Nous relançons le socketbridge
+        qDebug() << "Try to restart datimob";
+        m_process->start();
+        m_process->waitForFinished();                       //Waits for execution to complete
+
+        QString StdOut = m_process->readAllStandardOutput();  //Reads standard output
+        QString StdError = m_process->readAllStandardError();   //Reads standard error
+
+        qDebug() <<  "\n Printing the standard output..........\n"
+                  <<  StdOut
+                  << "\n Printing the standard error..........\n"
+                  << StdError << "\n\n";
+    }
 }
 void Socket::timeoutReached(){
      m_app->exit(1);

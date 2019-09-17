@@ -27,6 +27,7 @@ public slots:
     void timeoutReached();
     void onTextMessageReceived(const QString &msg);
     void sendPing();
+    void resetSocketBridgeAttempts();
     void errorWhileRestartingBridge(QProcess::ProcessError error);
 
 private:
@@ -41,6 +42,7 @@ private:
     int m_triesThreshold;
     QString m_serviceName;
     QProcess *m_process;
+    int m_recursiveTime;
 
 };
 
