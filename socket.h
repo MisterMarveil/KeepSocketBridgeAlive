@@ -12,6 +12,7 @@
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QProcess>
+#include <QDateTime>
 
 class Socket : public QObject
 {
