@@ -36,15 +36,15 @@ private:
     void loadSettings();
     QMap<QString, QVariant> retrieveJsonDoc(const QString &message);
     QWebSocket *m_webSocket;
-    QString m_url;
-    QCoreApplication *m_app;
-    QTimer *m_ttlTimer;
-    QTimer *m_recursiveTimer;
-    int m_triesCount;
-    int m_triesThreshold;
+    QString m_url;                  //
+    QCoreApplication *m_app;       //app pointer, that help to self close the program
+    QTimer *m_ttlTimer;           //time to live timer for keep alive program
+    QTimer *m_recursiveTimer;    //recursive timer for ping check
+    int m_triesCount;           //number of times we try to reach the server before to send a restart signal to the socketbridge
+    int m_triesThreshold;      //the threshold choosen for m_triesCount
     QString m_serviceName;
     QProcess *m_process;
-    int m_recursiveTime;
+    int m_recursiveTime;    //the time of a ping
 
 };
 

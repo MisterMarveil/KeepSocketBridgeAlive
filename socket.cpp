@@ -2,7 +2,7 @@
 
 Socket::Socket(QCoreApplication *app, QObject *parent) :
     QObject(parent),
-    m_url("ws://dd:4559"),
+    m_url("ws://localhost:4559"),
     m_app(app),
     m_triesCount(0),
     m_triesThreshold(3),
@@ -25,10 +25,14 @@ Socket::Socket(QCoreApplication *app, QObject *parent) :
 
         resetSocketBridgeAttempts();
     });
+
+    connect(m_recursiveTimer, &QTimer::timeout, this, &Socket::sendPing);
+    m_recursiveTimer->start(m_recursiveTime);
+
     m_webSocket->open(QUrl(m_url));
 
-    //any 1hour= 3600000ms, we throw the timer so that the process is killed
-    m_ttlTimer->singleShot((3600000), this, SLOT(timeoutReached()));
+    //any 1hour= 900000ms, we throw the timer so that the process is killed
+    m_ttlTimer->singleShot((900000), this, SLOT(timeoutReached()));
 }
 
 void Socket::errorWhileRestartingBridge(QProcess::ProcessError error){
@@ -126,19 +130,23 @@ void Socket::sendPing(){
 void Socket::resetSocketBridgeAttempts(){
     if(m_webSocket->isValid()){        
         qDebug() << "bridge is on " << QDateTime::currentDateTime().toString() << "\n";
+        if(!m_recursiveTimer->isActive())
+             m_recursiveTimer->start(m_recursiveTime);
         return;
     }else{
         qDebug() << "fail to connect bridge may be down \n";
+        m_recursiveTimer->stop();
     }
 
 
     if(m_triesCount < m_triesThreshold){//nous ne sommes pas encore à la limite des essais donc nous essayons
         m_webSocket->open(m_url);
-        m_recursiveTimer->stop();       
         m_triesCount++;
-        qDebug() << "initialization programmed";
+        qDebug() << "initialization programmed. Attempt number " << m_triesCount << "/" << m_triesThreshold;
+
     }else{//nous avons atteint la limite. Nous relançons le socketbridge
-        qDebug() << "Try to restart socketbridge";
+
+        qDebug() << "We've already tried to open Socket unsuccessfully, now trying to restart socketbridge and php clients services";
         m_process->setProgram("systemctl");
         m_process->setArguments(QStringList() << "restart" << m_serviceName);
         m_process->start();
@@ -147,7 +155,7 @@ void Socket::resetSocketBridgeAttempts(){
         QString StdOut = m_process->readAllStandardOutput();  //Reads standard output
         QString StdError = m_process->readAllStandardError();   //Reads standard error
 
-        qDebug() <<  "\n Printing the standard output  for dati_socket..........\n"
+         qDebug() <<  "\n Printing the standard output  for dati_socket..........\n"
                   <<  StdOut
                   << "\n Printing the standard error  for dati_socket..........\n"
                   << StdError << "\n\n";
@@ -165,11 +173,13 @@ void Socket::resetSocketBridgeAttempts(){
                    << "\n Printing the standard error  for dati_php..........\n"
                    << StdError << "\n\n";
     }
-     m_recursiveTimer->singleShot(m_recursiveTime, this, SLOT(resetSocketBridgeAttempts()));
+     QTimer::singleShot(m_recursiveTime, this, SLOT(resetSocketBridgeAttempts()));
 }
+
 void Socket::initSocket(){
     m_webSocket->open(m_url);
 }
+
 void Socket::timeoutReached(){
      m_app->exit(1);
 }
